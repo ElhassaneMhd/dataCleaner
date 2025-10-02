@@ -1,33 +1,37 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { getSMTPConfig, updateSMTPConfig } from '../services/api';
+import { getSMTPConfig, updateSMTPConfig, type SMTPConfig as SMTPConfigType } from '../services/api';
 
 interface SMTPConfigProps {
   onClose: () => void;
 }
 
-interface SMTPSettings {
-  fromEmail: string;
-  heloHostname: string;
-  smtpEnabled: boolean;
-  bypassBlacklist: boolean;
-}
-
 export default function SMTPConfig({ onClose }: SMTPConfigProps) {
-  const [config, setConfig] = useState<SMTPSettings>({
-    fromEmail: 'verify@datacleaner.local',
-    heloHostname: 'datacleaner.local',
-    smtpEnabled: true,
+  const [config, setConfig] = useState<SMTPConfigType>({
+    verifyVPSHost: '',
+    verifyVPSPort: 25,
+    verifyFromEmail: 'verify@datacleaner.local',
+    verifyHeloHostname: 'datacleaner.local',
+    verifyEnabled: false,
     bypassBlacklist: true,
+    sendingHost: '',
+    sendingPort: 587,
+    sendingUsername: '',
+    sendingPassword: '',
+    sendingFromEmail: '',
+    sendingTestEnabled: false,
   });
 
   const { data: currentConfig, isLoading } = useQuery({
     queryKey: ['smtpConfig'],
     queryFn: getSMTPConfig,
-    onSuccess: (data: SMTPSettings) => {
-      setConfig(data);
-    },
   });
+
+  useEffect(() => {
+    if (currentConfig) {
+      setConfig(currentConfig);
+    }
+  }, [currentConfig]);
 
   const updateMutation = useMutation({
     mutationFn: updateSMTPConfig,
@@ -41,25 +45,25 @@ export default function SMTPConfig({ onClose }: SMTPConfigProps) {
     updateMutation.mutate(config);
   };
 
-  const handlePreset = (preset: 'disabled' | 'bypass' | 'strict') => {
+  const handleVerifyPreset = (preset: 'disabled' | 'bypass' | 'strict') => {
     switch (preset) {
       case 'disabled':
-        setConfig({ ...config, smtpEnabled: false });
+        setConfig({ ...config, verifyEnabled: false });
         break;
       case 'bypass':
-        setConfig({ ...config, smtpEnabled: true, bypassBlacklist: true });
+        setConfig({ ...config, verifyEnabled: true, bypassBlacklist: true });
         break;
       case 'strict':
-        setConfig({ ...config, smtpEnabled: true, bypassBlacklist: false });
+        setConfig({ ...config, verifyEnabled: true, bypassBlacklist: false });
         break;
     }
   };
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
         {/* Header */}
-        <div className="bg-gradient-to-r from-indigo-600 to-purple-600 px-8 py-6 flex items-center justify-between">
+        <div className="bg-gradient-to-r from-indigo-600 to-purple-600 px-8 py-6 flex items-center justify-between sticky top-0 z-10">
           <div className="flex items-center space-x-3">
             <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
               <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -69,7 +73,7 @@ export default function SMTPConfig({ onClose }: SMTPConfigProps) {
             </div>
             <div>
               <h2 className="text-2xl font-bold text-white">SMTP Configuration</h2>
-              <p className="text-indigo-100 text-sm">Configure email validation settings</p>
+              <p className="text-indigo-100 text-sm">Configure verification and sending SMTP servers</p>
             </div>
           </div>
           <button
@@ -82,187 +86,325 @@ export default function SMTPConfig({ onClose }: SMTPConfigProps) {
           </button>
         </div>
 
-        {/* Content */}
-        <div className="p-8">
-          {isLoading ? (
-            <div className="text-center py-8">
-              <div className="w-12 h-12 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin mx-auto mb-4"></div>
-              <p className="text-gray-600">Loading configuration...</p>
-            </div>
-          ) : (
-            <form onSubmit={handleSubmit} className="space-y-6">
-              {/* Quick Presets */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-3">Quick Presets</label>
-                <div className="grid grid-cols-3 gap-3">
-                  <button
-                    type="button"
-                    onClick={() => handlePreset('disabled')}
-                    className="p-4 border-2 border-gray-200 rounded-xl hover:border-blue-400 hover:bg-blue-50 transition-all text-left"
-                  >
-                    <div className="font-semibold text-gray-900 mb-1">Syntax + DNS</div>
-                    <div className="text-xs text-gray-600">SMTP Disabled</div>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handlePreset('bypass')}
-                    className="p-4 border-2 border-green-200 rounded-xl hover:border-green-400 hover:bg-green-50 transition-all text-left"
-                  >
-                    <div className="font-semibold text-gray-900 mb-1">Bypass Mode</div>
-                    <div className="text-xs text-gray-600">Recommended</div>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handlePreset('strict')}
-                    className="p-4 border-2 border-red-200 rounded-xl hover:border-red-400 hover:bg-red-50 transition-all text-left"
-                  >
-                    <div className="font-semibold text-gray-900 mb-1">Strict Mode</div>
-                    <div className="text-xs text-gray-600">Full SMTP</div>
-                  </button>
+        {isLoading ? (
+          <div className="p-12 flex justify-center">
+            <div className="animate-spin h-10 w-10 border-4 border-indigo-500 border-t-transparent rounded-full"></div>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="p-8 space-y-8">
+            {/* Section 1: Verification SMTP */}
+            <div className="space-y-6">
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                  <span className="text-blue-600 font-bold">1</span>
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900">Verification SMTP</h3>
+                  <p className="text-sm text-gray-600">Used to check if emails exist (validation phase)</p>
                 </div>
               </div>
 
-              {/* From Email */}
+              {/* IP Protection Warning */}
+              <div className="p-4 bg-red-50 border-2 border-red-300 rounded-lg">
+                <div className="flex items-start space-x-3">
+                  <svg className="w-6 h-6 text-red-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                  <div className="text-sm text-red-900">
+                    <p className="font-bold">⚠️ NEVER USE YOUR MAIN SERVER IP FOR VERIFICATION!</p>
+                    <p className="mt-1">SMTP verification connects to thousands of mail servers. This WILL blacklist your IP on Spamhaus, Barracuda, etc.</p>
+                    <p className="mt-1 font-semibold">✅ SOLUTION: Use a separate VPS ($5/month) OR use Syntax+DNS only (90-95% accurate, ZERO risk)</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Verification Presets */}
+              <div className="grid grid-cols-3 gap-3">
+                <button
+                  type="button"
+                  onClick={() => handleVerifyPreset('disabled')}
+                  className="p-4 border-2 border-green-300 bg-green-50 rounded-xl hover:border-green-500 transition-all text-left"
+                >
+                  <div className="font-semibold text-green-900">✅ Syntax + DNS</div>
+                  <div className="text-xs text-green-700">SAFE - No blacklist risk</div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleVerifyPreset('bypass')}
+                  className="p-4 border-2 border-green-200 bg-green-50 rounded-xl hover:border-green-500 transition-all text-left"
+                >
+                  <div className="font-semibold text-green-900">Bypass Mode</div>
+                  <div className="text-xs text-green-700">Skip blacklist errors</div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleVerifyPreset('strict')}
+                  className="p-4 border-2 border-gray-200 rounded-xl hover:border-red-500 hover:bg-red-50 transition-all text-left"
+                >
+                  <div className="font-semibold text-gray-900">Strict Mode</div>
+                  <div className="text-xs text-gray-600">All validations required</div>
+                </button>
+              </div>
+
+              {/* VPS Configuration */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    🔒 Verification VPS Host/IP
+                  </label>
+                  <input
+                    type="text"
+                    value={config.verifyVPSHost}
+                    onChange={(e) => setConfig({ ...config, verifyVPSHost: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    placeholder="123.45.67.89 or vps.example.com"
+                  />
+                  <p className="text-xs text-gray-600 mt-1">Required for SMTP verification. Leave empty for Syntax+DNS only.</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    VPS Port
+                  </label>
+                  <input
+                    type="number"
+                    value={config.verifyVPSPort}
+                    onChange={(e) => setConfig({ ...config, verifyVPSPort: parseInt(e.target.value) })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    placeholder="25"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    From Email
+                  </label>
+                  <input
+                    type="email"
+                    value={config.verifyFromEmail}
+                    onChange={(e) => setConfig({ ...config, verifyFromEmail: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    placeholder="verify@yourdomain.com"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    HELO Hostname
+                  </label>
+                  <input
+                    type="text"
+                    value={config.verifyHeloHostname}
+                    onChange={(e) => setConfig({ ...config, verifyHeloHostname: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    placeholder="yourdomain.com"
+                  />
+                </div>
+              </div>
+
+              <div className={`flex items-center justify-between p-4 rounded-lg border-2 ${!config.verifyVPSHost ? 'bg-gray-100 border-gray-300' : 'bg-gray-50 border-gray-200'}`}>
+                <div>
+                  <div className="font-semibold text-gray-900">Enable SMTP Verification</div>
+                  <div className="text-sm text-gray-600">
+                    {!config.verifyVPSHost ? '⚠️ Requires VPS configuration' : 'Connect via VPS to verify emails'}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setConfig({ ...config, verifyEnabled: !config.verifyEnabled })}
+                  disabled={!config.verifyVPSHost}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                    config.verifyEnabled && config.verifyVPSHost ? 'bg-indigo-600' : 'bg-gray-300'
+                  } ${!config.verifyVPSHost ? 'opacity-50 cursor-not-allowed' : ''}`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      config.verifyEnabled && config.verifyVPSHost ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              </div>
+
+              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                <div>
+                  <div className="font-semibold text-gray-900">Bypass on Blacklist</div>
+                  <div className="text-sm text-gray-600">Accept emails when IP is blacklisted</div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setConfig({ ...config, bypassBlacklist: !config.bypassBlacklist })}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                    config.bypassBlacklist ? 'bg-green-600' : 'bg-gray-300'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      config.bypassBlacklist ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              </div>
+            </div>
+
+            {/* Divider */}
+            <div className="border-t border-gray-200"></div>
+
+            {/* Section 2: Sending SMTP */}
+            <div className="space-y-6">
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                  <span className="text-purple-600 font-bold">2</span>
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900">Sending SMTP Server</h3>
+                  <p className="text-sm text-gray-600">Your actual email server for sending campaigns</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    SMTP Host
+                  </label>
+                  <input
+                    type="text"
+                    value={config.sendingHost}
+                    onChange={(e) => setConfig({ ...config, sendingHost: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    placeholder="smtp.yourmailserver.com"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    SMTP Port
+                  </label>
+                  <input
+                    type="number"
+                    value={config.sendingPort}
+                    onChange={(e) => setConfig({ ...config, sendingPort: parseInt(e.target.value) })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    placeholder="587"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Username
+                  </label>
+                  <input
+                    type="text"
+                    value={config.sendingUsername}
+                    onChange={(e) => setConfig({ ...config, sendingUsername: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    placeholder="username"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Password
+                  </label>
+                  <input
+                    type="password"
+                    value={config.sendingPassword}
+                    onChange={(e) => setConfig({ ...config, sendingPassword: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    placeholder="••••••••"
+                  />
+                </div>
+              </div>
+
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  From Email Address
+                  From Email
                 </label>
                 <input
                   type="email"
-                  value={config.fromEmail}
-                  onChange={(e) => setConfig({ ...config, fromEmail: e.target.value })}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                  placeholder="verify@datacleaner.local"
+                  value={config.sendingFromEmail}
+                  onChange={(e) => setConfig({ ...config, sendingFromEmail: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  placeholder="sender@yourdomain.com"
                 />
-                <p className="text-xs text-gray-500 mt-1">Email address used in SMTP MAIL FROM command</p>
               </div>
 
-              {/* HELO Hostname */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  HELO Hostname
-                </label>
-                <input
-                  type="text"
-                  value={config.heloHostname}
-                  onChange={(e) => setConfig({ ...config, heloHostname: e.target.value })}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                  placeholder="datacleaner.local"
-                />
-                <p className="text-xs text-gray-500 mt-1">Hostname used in SMTP HELO command</p>
-              </div>
-
-              {/* SMTP Enabled Toggle */}
-              <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
-                <label className="flex items-center justify-between cursor-pointer">
-                  <div>
-                    <div className="font-semibold text-gray-900">Enable SMTP Validation</div>
-                    <div className="text-sm text-gray-600">Perform actual SMTP connection tests</div>
-                  </div>
-                  <div className="relative">
-                    <input
-                      type="checkbox"
-                      checked={config.smtpEnabled}
-                      onChange={(e) => setConfig({ ...config, smtpEnabled: e.target.checked })}
-                      className="sr-only peer"
-                    />
-                    <div className="w-14 h-8 bg-gray-300 peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-6 after:content-[''] after:absolute after:top-1 after:left-1 after:bg-white after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-indigo-600"></div>
-                  </div>
-                </label>
-              </div>
-
-              {/* Bypass Blacklist Toggle */}
-              {config.smtpEnabled && (
-                <div className="bg-yellow-50 p-4 rounded-xl border border-yellow-200">
-                  <label className="flex items-center justify-between cursor-pointer">
-                    <div>
-                      <div className="font-semibold text-gray-900">Bypass Blacklist Errors</div>
-                      <div className="text-sm text-gray-600">Mark emails as valid if blacklisted by Spamhaus</div>
-                    </div>
-                    <div className="relative">
-                      <input
-                        type="checkbox"
-                        checked={config.bypassBlacklist}
-                        onChange={(e) => setConfig({ ...config, bypassBlacklist: e.target.checked })}
-                        className="sr-only peer"
-                      />
-                      <div className="w-14 h-8 bg-gray-300 peer-focus:ring-4 peer-focus:ring-yellow-300 rounded-full peer peer-checked:after:translate-x-6 after:content-[''] after:absolute after:top-1 after:left-1 after:bg-white after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-yellow-500"></div>
-                    </div>
-                  </label>
+              <div className="flex items-center justify-between p-4 bg-purple-50 rounded-lg border-2 border-purple-200">
+                <div>
+                  <div className="font-semibold text-gray-900">Test MX Reachability</div>
+                  <div className="text-sm text-gray-600">Test if your sending SMTP can reach each MX server</div>
                 </div>
-              )}
-
-              {/* Info Box */}
-              <div className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded">
-                <div className="flex items-start space-x-3">
-                  <svg className="w-5 h-5 text-blue-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <div className="text-sm text-blue-700">
-                    <p className="font-semibold mb-1">Current IP: 41.140.212.218</p>
-                    <p>If blacklisted, enable "Bypass Blacklist Errors" or disable SMTP validation entirely.</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Success/Error Messages */}
-              {updateMutation.isSuccess && (
-                <div className="bg-green-50 border-l-4 border-green-500 p-4 rounded animate-fadeIn">
-                  <div className="flex items-center space-x-3">
-                    <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                    <p className="text-green-700 font-medium">Configuration updated successfully!</p>
-                  </div>
-                </div>
-              )}
-
-              {updateMutation.isError && (
-                <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded animate-shake">
-                  <div className="flex items-center space-x-3">
-                    <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                    <p className="text-red-700 font-medium">Failed to update configuration</p>
-                  </div>
-                </div>
-              )}
-
-              {/* Action Buttons */}
-              <div className="flex items-center justify-end space-x-3 pt-4">
                 <button
                   type="button"
-                  onClick={onClose}
-                  className="px-6 py-3 border border-gray-300 rounded-lg font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                  onClick={() => setConfig({ ...config, sendingTestEnabled: !config.sendingTestEnabled })}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                    config.sendingTestEnabled ? 'bg-purple-600' : 'bg-gray-300'
+                  }`}
                 >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={updateMutation.isPending}
-                  className="px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center space-x-2"
-                >
-                  {updateMutation.isPending ? (
-                    <>
-                      <svg className="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
-                      <span>Saving...</span>
-                    </>
-                  ) : (
-                    <>
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
-                      <span>Save Configuration</span>
-                    </>
-                  )}
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      config.sendingTestEnabled ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
                 </button>
               </div>
-            </form>
-          )}
-        </div>
+
+              {config.sendingTestEnabled && (
+                <div className="p-4 bg-yellow-50 border-l-4 border-yellow-400 rounded">
+                  <div className="flex items-start space-x-3">
+                    <svg className="w-5 h-5 text-yellow-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <div className="text-sm text-yellow-800">
+                      <p className="font-semibold">MX Reachability Testing Enabled</p>
+                      <p className="mt-1">After validation, the system will test if your sending SMTP server can successfully connect to each MX server found. Results will be grouped by reachability.</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Footer Actions */}
+            <div className="flex items-center justify-between pt-6 border-t border-gray-200">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-lg font-semibold hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={updateMutation.isPending}
+                className="px-8 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl hover:scale-105 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {updateMutation.isPending ? 'Saving...' : 'Save Configuration'}
+              </button>
+            </div>
+
+            {/* Success/Error Messages */}
+            {updateMutation.isSuccess && (
+              <div className="p-4 bg-green-50 border-l-4 border-green-500 rounded animate-slideIn">
+                <div className="flex items-center space-x-3">
+                  <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  <p className="text-green-800 font-medium">Configuration saved successfully!</p>
+                </div>
+              </div>
+            )}
+
+            {updateMutation.isError && (
+              <div className="p-4 bg-red-50 border-l-4 border-red-500 rounded animate-shake">
+                <div className="flex items-center space-x-3">
+                  <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                  <p className="text-red-800 font-medium">Failed to save configuration. Please try again.</p>
+                </div>
+              </div>
+            )}
+          </form>
+        )}
       </div>
     </div>
   );

@@ -211,18 +211,26 @@ func (h *Handler) GetValidationResults(c *fiber.Ctx) error {
 	})
 }
 
-// getMXGroupsSummary returns MX groups summary
+// getMXGroupsSummary returns MX groups summary with sending SMTP test results
 func (h *Handler) getMXGroupsSummary(mxGroups map[string][]models.ValidationResult) []models.MXGroup {
 	var groups []models.MXGroup
+
+	// Test each MX server with sending SMTP if enabled
+	mxTestResults := make(map[string]bool)
+	for mx := range mxGroups {
+		mxTestResults[mx] = h.validator.TestSendingSMTPToMX(mx)
+	}
+
 	for mx, results := range mxGroups {
 		emails := make([]string, len(results))
 		for i, r := range results {
 			emails[i] = r.Email
 		}
 		groups = append(groups, models.MXGroup{
-			MXRecord: mx,
-			Emails:   emails,
-			Count:    len(results),
+			MXRecord:        mx,
+			Emails:          emails,
+			Count:           len(results),
+			SendingSMTPTest: mxTestResults[mx],
 		})
 	}
 	return groups
@@ -311,14 +319,7 @@ func (h *Handler) ExportByMX(c *fiber.Ctx) error {
 
 // ConfigureSMTP configures SMTP validation settings
 func (h *Handler) ConfigureSMTP(c *fiber.Ctx) error {
-	type SMTPConfig struct {
-		FromEmail        string `json:"fromEmail"`
-		HeloHostname     string `json:"heloHostname"`
-		SMTPEnabled      bool   `json:"smtpEnabled"`
-		BypassBlacklist  bool   `json:"bypassBlacklist"`
-	}
-
-	var config SMTPConfig
+	var config models.SMTPConfig
 	if err := c.BodyParser(&config); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "Invalid request body",
@@ -326,29 +327,18 @@ func (h *Handler) ConfigureSMTP(c *fiber.Ctx) error {
 	}
 
 	// Update validator configuration
-	h.validator.SetSMTPConfig(
-		config.FromEmail,
-		config.HeloHostname,
-		config.SMTPEnabled,
-		config.BypassBlacklist,
-	)
+	h.validator.SetSMTPConfig(config)
 
 	return c.JSON(fiber.Map{
 		"message": "SMTP configuration updated successfully",
-		"config": config,
+		"config":  config,
 	})
 }
 
 // GetSMTPConfig returns current SMTP configuration
 func (h *Handler) GetSMTPConfig(c *fiber.Ctx) error {
-	fromEmail, heloHostname, smtpEnabled, bypassBlacklist := h.validator.GetSMTPConfig()
-
-	return c.JSON(fiber.Map{
-		"fromEmail":       fromEmail,
-		"heloHostname":    heloHostname,
-		"smtpEnabled":     smtpEnabled,
-		"bypassBlacklist": bypassBlacklist,
-	})
+	config := h.validator.GetSMTPConfig()
+	return c.JSON(config)
 }
 
 // Helper functions

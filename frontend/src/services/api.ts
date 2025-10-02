@@ -40,10 +40,18 @@ export const downloadMXGrouped = (jobId: string, format: 'csv' | 'excel') => {
 
 // SMTP Configuration
 export interface SMTPConfig {
-  fromEmail: string;
-  heloHostname: string;
-  smtpEnabled: boolean;
+  verifyVPSHost: string;
+  verifyVPSPort: number;
+  verifyFromEmail: string;
+  verifyHeloHostname: string;
+  verifyEnabled: boolean;
   bypassBlacklist: boolean;
+  sendingHost: string;
+  sendingPort: number;
+  sendingUsername: string;
+  sendingPassword: string;
+  sendingFromEmail: string;
+  sendingTestEnabled: boolean;
 }
 
 export const getSMTPConfig = async (): Promise<SMTPConfig> => {
