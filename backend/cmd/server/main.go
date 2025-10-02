@@ -2,11 +2,13 @@ package main
 
 import (
 	"datacleaner/internal/handlers"
+	ws "datacleaner/internal/websocket"
 	"log"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/logger"
+	"github.com/gofiber/websocket/v2"
 )
 
 func main() {
@@ -21,8 +23,12 @@ func main() {
 		AllowHeaders: "Origin, Content-Type, Accept",
 	}))
 
+	// Initialize WebSocket manager
+	wsManager := ws.NewManager()
+	go wsManager.Run()
+
 	// Initialize handler
-	h := handlers.NewHandler()
+	h := handlers.NewHandler(wsManager)
 
 	// Routes
 	api := app.Group("/api")
@@ -47,6 +53,19 @@ func main() {
 
 	// Get current SMTP configuration
 	api.Get("/config/smtp", h.GetSMTPConfig)
+
+	// WebSocket endpoint for real-time job status updates
+	app.Get("/ws/:jobId", func(c *fiber.Ctx) error {
+		jobID := c.Params("jobId")
+
+		// Check if it's a websocket upgrade request
+		if websocket.IsWebSocketUpgrade(c) {
+			return websocket.New(func(conn *websocket.Conn) {
+				h.HandleWebSocketWithJobID(conn, jobID)
+			})(c)
+		}
+		return fiber.ErrUpgradeRequired
+	})
 
 	// Health check
 	api.Get("/health", func(c *fiber.Ctx) error {

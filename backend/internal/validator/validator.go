@@ -25,7 +25,7 @@ type EmailValidator struct {
 func NewEmailValidator(concurrency int) *EmailValidator {
 	return &EmailValidator{
 		concurrency:       concurrency,
-		timeout:           10 * time.Second,
+		timeout:           5 * time.Second,
 		fromEmail:         "verify@datacleaner.local",
 		heloHostname:      "datacleaner.local",
 		smtpEnabled:       true,
@@ -39,6 +39,11 @@ func (v *EmailValidator) SetSMTPConfig(fromEmail, heloHostname string, enabled, 
 	v.heloHostname = heloHostname
 	v.smtpEnabled = enabled
 	v.bypassOnBlacklist = bypassBlacklist
+}
+
+// GetSMTPConfig returns current SMTP configuration
+func (v *EmailValidator) GetSMTPConfig() (string, string, bool, bool) {
+	return v.fromEmail, v.heloHostname, v.smtpEnabled, v.bypassOnBlacklist
 }
 
 // ValidateSyntax checks if email follows proper syntax

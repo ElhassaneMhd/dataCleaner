@@ -11,8 +11,10 @@ import (
 	"datacleaner/internal/models"
 	"datacleaner/internal/parser"
 	"datacleaner/internal/validator"
+	ws "datacleaner/internal/websocket"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/websocket/v2"
 	"github.com/google/uuid"
 )
 
@@ -22,6 +24,7 @@ type Handler struct {
 	grouper   *grouper.MXGrouper
 	jobs      map[string]*JobData
 	mu        sync.RWMutex
+	wsManager *ws.Manager
 }
 
 type JobData struct {
@@ -31,12 +34,13 @@ type JobData struct {
 	MXGroups      map[string][]models.ValidationResult
 }
 
-func NewHandler() *Handler {
+func NewHandler(wsManager *ws.Manager) *Handler {
 	return &Handler{
-		validator: validator.NewEmailValidator(100), // 100 concurrent validations
+		validator: validator.NewEmailValidator(500), // 500 concurrent validations
 		parser:    parser.NewFileParser(1000),
 		grouper:   grouper.NewMXGrouper(),
 		jobs:      make(map[string]*JobData),
+		wsManager: wsManager,
 	}
 }
 
@@ -99,14 +103,39 @@ func (h *Handler) processValidation(jobID string, emails []string) {
 	// Progress channel
 	progressChan := make(chan int, len(emails))
 
-	// Start progress tracker
+	// Start progress tracker with throttling
 	go func() {
+		ticker := time.NewTicker(100 * time.Millisecond) // Update UI max 10 times per second
+		defer ticker.Stop()
+
+		lastBroadcast := time.Now()
+		shouldBroadcast := false
+
 		for range progressChan {
 			h.mu.Lock()
 			jobData.Status.ProcessedRecords++
 			jobData.Status.Progress = float64(jobData.Status.ProcessedRecords) / float64(jobData.Status.TotalRecords) * 100
+			shouldBroadcast = true
 			h.mu.Unlock()
+
+			// Throttle broadcasts to avoid overwhelming WebSocket
+			select {
+			case <-ticker.C:
+				if shouldBroadcast && time.Since(lastBroadcast) >= 100*time.Millisecond {
+					h.mu.RLock()
+					h.wsManager.BroadcastToJob(jobID, jobData.Status)
+					h.mu.RUnlock()
+					lastBroadcast = time.Now()
+					shouldBroadcast = false
+				}
+			default:
+			}
 		}
+
+		// Send final update
+		h.mu.RLock()
+		h.wsManager.BroadcastToJob(jobID, jobData.Status)
+		h.mu.RUnlock()
 	}()
 
 	// Validate emails
@@ -139,6 +168,8 @@ func (h *Handler) processValidation(jobID string, emails []string) {
 	jobData.ValidResults = validResults
 	jobData.InvalidResults = invalidResults
 	jobData.MXGroups = mxGroups
+	// Broadcast final status update via WebSocket
+	h.wsManager.BroadcastToJob(jobID, jobData.Status)
 	h.mu.Unlock()
 }
 
@@ -310,12 +341,13 @@ func (h *Handler) ConfigureSMTP(c *fiber.Ctx) error {
 
 // GetSMTPConfig returns current SMTP configuration
 func (h *Handler) GetSMTPConfig(c *fiber.Ctx) error {
+	fromEmail, heloHostname, smtpEnabled, bypassBlacklist := h.validator.GetSMTPConfig()
+
 	return c.JSON(fiber.Map{
-		"fromEmail":       "verify@datacleaner.local",
-		"heloHostname":    "datacleaner.local",
-		"smtpEnabled":     true,
-		"bypassBlacklist": true,
-		"note":            "Current active configuration",
+		"fromEmail":       fromEmail,
+		"heloHostname":    heloHostname,
+		"smtpEnabled":     smtpEnabled,
+		"bypassBlacklist": bypassBlacklist,
 	})
 }
 
@@ -332,4 +364,26 @@ func getContentType(format string) string {
 		return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 	}
 	return "text/csv"
+}
+
+// HandleWebSocketWithJobID handles WebSocket connections for real-time updates
+func (h *Handler) HandleWebSocketWithJobID(c *websocket.Conn, jobID string) {
+	client := &ws.Client{
+		JobID: jobID,
+		Conn:  c,
+		Send:  make(chan interface{}, 256),
+	}
+
+	h.wsManager.RegisterClient(client)
+
+	// Send initial status
+	h.mu.RLock()
+	if jobData, exists := h.jobs[jobID]; exists {
+		client.Send <- jobData.Status
+	}
+	h.mu.RUnlock()
+
+	// Start write and read pumps
+	go client.WritePump()
+	client.ReadPump(h.wsManager)
 }

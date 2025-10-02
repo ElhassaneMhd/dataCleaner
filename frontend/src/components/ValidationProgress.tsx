@@ -1,5 +1,5 @@
-import { useQuery } from '@tanstack/react-query';
-import { getJobStatus } from '../services/api';
+import { useState, useEffect } from 'react';
+import { useWebSocket } from '../hooks/useWebSocket';
 import type { JobStatus } from '../types';
 
 interface ValidationProgressProps {
@@ -8,19 +8,23 @@ interface ValidationProgressProps {
 }
 
 export default function ValidationProgress({ jobId, onComplete }: ValidationProgressProps) {
-  const { data: jobStatus } = useQuery<JobStatus>({
-    queryKey: ['jobStatus', jobId],
-    queryFn: () => getJobStatus(jobId),
-    refetchInterval: (query) => {
-      const status = query.state.data?.status;
-      return status === 'processing' ? 1000 : false;
-    },
-    enabled: !!jobId,
-  });
+  const [jobStatus, setJobStatus] = useState<JobStatus | null>(null);
 
-  if (jobStatus?.status === 'completed') {
-    onComplete();
-  }
+  const wsUrl = jobId ? `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.hostname}:8080/ws/${jobId}` : null;
+
+  const { isConnected } = useWebSocket<JobStatus>(wsUrl, {
+    onMessage: (data) => {
+      setJobStatus(data);
+      if (data.status === 'completed') {
+        onComplete();
+      }
+    },
+    onError: (error) => {
+      console.error('WebSocket error:', error);
+    },
+    reconnectAttempts: 5,
+    reconnectInterval: 2000,
+  });
 
   if (!jobStatus) return null;
 
@@ -45,6 +49,12 @@ export default function ValidationProgress({ jobId, onComplete }: ValidationProg
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
                   </div>
+                </div>
+              )}
+              {isConnected && (
+                <div className="flex items-center space-x-2">
+                  <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                  <span className="text-xs text-white/80">Live</span>
                 </div>
               )}
             </div>
