@@ -13,7 +13,7 @@ import (
 
 func main() {
 	app := fiber.New(fiber.Config{
-		BodyLimit: 100 * 1024 * 1024, // 100MB max file size
+		BodyLimit: 500 * 1024 * 1024, // 500MB max file size
 	})
 
 	// Middleware
@@ -39,8 +39,14 @@ func main() {
 	// Get job status
 	api.Get("/jobs/:jobId/status", h.GetJobStatus)
 
-	// Get validation results
+	// Get validation results (counts only)
 	api.Get("/jobs/:jobId/results", h.GetValidationResults)
+
+	// Get paginated MX groups list
+	api.Get("/jobs/:jobId/mx-groups", h.GetMXGroupsList)
+
+	// Get paginated emails for specific MX group
+	api.Get("/jobs/:jobId/mx-group", h.GetMXGroupPaginated)
 
 	// Export valid emails (single file)
 	api.Get("/jobs/:jobId/export/valid", h.ExportValidEmails)

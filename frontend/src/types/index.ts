@@ -31,13 +31,20 @@ export interface MXGroup {
 export interface ValidationResults {
   validCount: number;
   invalidCount: number;
-  mxGroups: MXGroup[];
   summary: {
     totalProcessed: number;
     validEmails: number;
     invalidEmails: number;
     mxGroupCount: number;
   };
+}
+
+export interface MXGroupsListResponse {
+  mxGroups: MXGroup[];
+  page: number;
+  pageSize: number;
+  totalGroups: number;
+  totalPages: number;
 }
 
 export interface UploadResponse {

@@ -62,7 +62,7 @@ export default function FileUpload({ onUploadSuccess }: FileUploadProps) {
         {/* Header */}
         <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-4">
           <h2 className="text-xl font-bold text-white mb-1">Upload Your Data</h2>
-          <p className="text-sm text-blue-100">CSV and Excel files up to 100MB</p>
+          <p className="text-sm text-blue-100">CSV and Excel files up to 500MB</p>
         </div>
 
         {/* Upload Area */}
@@ -105,7 +105,7 @@ export default function FileUpload({ onUploadSuccess }: FileUploadProps) {
                   {selectedFile ? selectedFile.name : 'Click to upload or drag & drop'}
                 </p>
                 <p className="text-xs text-gray-500">
-                  CSV, XLS, or XLSX • Max 100MB
+                  CSV, XLS, or XLSX • Max 500MB
                 </p>
               </div>
             </div>

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { getValidationResults, downloadValidEmails, downloadMXGrouped } from '../services/api';
+import { getValidationResults, downloadValidEmails, downloadMXGrouped, getMXGroupsList, getMXGroupPaginated } from '../services/api';
 import type { ValidationResults, MXGroup } from '../types';
 
 interface ResultsProps {
@@ -9,6 +9,9 @@ interface ResultsProps {
 
 export default function Results({ jobId }: ResultsProps) {
   const [activeTab, setActiveTab] = useState<'summary' | 'mx'>('summary');
+  const [selectedMX, setSelectedMX] = useState<string | null>(null);
+  const [mxGroupsPage, setMxGroupsPage] = useState(1);
+  const [emailsPage, setEmailsPage] = useState(1);
 
   const { data, isLoading, error } = useQuery<ValidationResults>({
     queryKey: ['results', jobId],
@@ -16,6 +19,20 @@ export default function Results({ jobId }: ResultsProps) {
     enabled: !!jobId,
     retry: 3,
     retryDelay: 1000,
+  });
+
+  // Paginated MX groups list
+  const { data: mxGroupsList, isLoading: mxGroupsLoading } = useQuery({
+    queryKey: ['mx-groups', jobId, mxGroupsPage],
+    queryFn: () => getMXGroupsList(jobId, mxGroupsPage, 10),
+    enabled: !!jobId && activeTab === 'mx' && !selectedMX,
+  });
+
+  // Paginated emails for selected MX group
+  const { data: mxGroupData } = useQuery({
+    queryKey: ['mx-group', jobId, selectedMX, emailsPage],
+    queryFn: () => getMXGroupPaginated(jobId, selectedMX!, emailsPage, 10),
+    enabled: !!selectedMX,
   });
 
   if (isLoading) {
@@ -51,8 +68,6 @@ export default function Results({ jobId }: ResultsProps) {
   }
 
   if (!data) return null;
-
-  const mxGroups = data.mxGroups || [];
 
   return (
     <div className="w-full max-w-6xl mx-auto">
@@ -126,7 +141,7 @@ export default function Results({ jobId }: ResultsProps) {
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" />
                 </svg>
-                <span>MX Groups ({mxGroups.length})</span>
+                <span>MX Groups ({data.summary.mxGroupCount})</span>
               </div>
             </button>
           </div>
@@ -189,7 +204,7 @@ export default function Results({ jobId }: ResultsProps) {
                     </div>
                   </div>
                   <p className="text-sm font-medium text-purple-700 mb-1">MX Groups</p>
-                  <p className="text-3xl font-bold text-purple-900">{mxGroups.length}</p>
+                  <p className="text-3xl font-bold text-purple-900">{data.summary.mxGroupCount}</p>
                   <p className="text-xs text-purple-600 mt-1">Unique mail servers</p>
                 </div>
               </div>
@@ -211,45 +226,163 @@ export default function Results({ jobId }: ResultsProps) {
 
           {activeTab === 'mx' && (
             <div className="space-y-4">
-              {mxGroups.map((group: MXGroup, idx: number) => (
-                <div key={idx} className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200 overflow-hidden hover:shadow-md transition-all duration-200">
-                  <div className="px-5 py-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-3">
-                        <div className="w-10 h-10 rounded-lg bg-blue-500 flex items-center justify-center">
-                          <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" />
-                          </svg>
+              {!selectedMX ? (
+                // MX Groups List (sorted by count - largest first)
+                <>
+                  {mxGroupsLoading ? (
+                    <div className="text-center py-12">
+                      <div className="w-12 h-12 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto mb-4"></div>
+                      <p className="text-gray-600">Loading MX groups...</p>
+                    </div>
+                  ) : mxGroupsList?.mxGroups.map((group: MXGroup, idx: number) => (
+                    <div key={idx} className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200 overflow-hidden hover:shadow-md transition-all duration-200">
+                      <div className="px-5 py-4">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-3">
+                            <div className="w-10 h-10 rounded-lg bg-blue-500 flex items-center justify-center">
+                              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" />
+                              </svg>
+                            </div>
+                            <div>
+                              <p className="font-semibold text-gray-900 text-sm">{group.mxRecord}</p>
+                              <p className="text-xs text-gray-600">{group.count.toLocaleString()} emails</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center space-x-3">
+                            {group.sendingSMTPTest !== undefined && (
+                              <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                                group.sendingSMTPTest
+                                  ? 'bg-green-100 text-green-700'
+                                  : 'bg-red-100 text-red-700'
+                              }`}>
+                                {group.sendingSMTPTest ? '✓ Reachable' : '✗ Not Reachable'}
+                              </span>
+                            )}
+                            <span className="text-sm font-bold text-blue-600">
+                              {((group.count / data.validCount) * 100).toFixed(1)}%
+                            </span>
+                            <button
+                              onClick={() => {
+                                setSelectedMX(group.mxRecord);
+                                setEmailsPage(1);
+                              }}
+                              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold transition-colors"
+                            >
+                              View Emails
+                            </button>
+                          </div>
                         </div>
-                        <div>
-                          <p className="font-semibold text-gray-900 text-sm">{group.mxRecord}</p>
-                          <p className="text-xs text-gray-600">{group.count.toLocaleString()} emails</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center space-x-3">
-                        {group.sendingSMTPTest !== undefined && (
-                          <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                            group.sendingSMTPTest
-                              ? 'bg-green-100 text-green-700'
-                              : 'bg-red-100 text-red-700'
-                          }`}>
-                            {group.sendingSMTPTest ? '✓ Reachable' : '✗ Not Reachable'}
-                          </span>
-                        )}
-                        <span className="text-sm font-bold text-blue-600">
-                          {((group.count / data.validCount) * 100).toFixed(1)}%
-                        </span>
                       </div>
                     </div>
+                  ))}
+
+                  {/* MX Groups Pagination */}
+                  {mxGroupsList && mxGroupsList.totalPages > 1 && (
+                    <div className="flex items-center justify-center space-x-3 mt-6">
+                      <button
+                        onClick={() => setMxGroupsPage(p => Math.max(1, p - 1))}
+                        disabled={mxGroupsPage === 1}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed hover:bg-blue-700 transition-colors"
+                      >
+                        Previous
+                      </button>
+                      <span className="text-sm text-gray-700 font-medium bg-gray-100 px-4 py-2 rounded-lg">
+                        Page {mxGroupsPage} of {mxGroupsList.totalPages}
+                      </span>
+                      <button
+                        onClick={() => setMxGroupsPage(p => Math.min(mxGroupsList.totalPages, p + 1))}
+                        disabled={mxGroupsPage === mxGroupsList.totalPages}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed hover:bg-blue-700 transition-colors"
+                      >
+                        Next
+                      </button>
+                    </div>
+                  )}
+
+                  {mxGroupsList?.mxGroups.length === 0 && (
+                    <div className="text-center py-12">
+                      <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+                      </svg>
+                      <p className="text-gray-500 font-medium mt-3">No MX groups found</p>
+                    </div>
+                  )}
+                </>
+              ) : (
+                // Paginated Email List for Selected MX
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between mb-4">
+                    <button
+                      onClick={() => {
+                        setSelectedMX(null);
+                        setEmailsPage(1);
+                      }}
+                      className="flex items-center space-x-2 text-blue-600 hover:text-blue-700 font-medium"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                      </svg>
+                      <span>Back to MX Groups</span>
+                    </button>
                   </div>
-                </div>
-              ))}
-              {mxGroups.length === 0 && (
-                <div className="text-center py-12">
-                  <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
-                  </svg>
-                  <p className="text-gray-500 font-medium mt-3">No MX groups found</p>
+
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                    <h3 className="font-bold text-lg text-blue-900 mb-1">{selectedMX}</h3>
+                    {mxGroupData && (
+                      <p className="text-sm text-blue-700">
+                        Total: {mxGroupData.totalEmails.toLocaleString()} emails •
+                        Page {mxGroupData.page} of {mxGroupData.totalPages}
+                      </p>
+                    )}
+                  </div>
+
+                  {mxGroupData && (
+                    <>
+                      {/* Debug Info */}
+                      <div className="bg-gray-100 p-3 rounded text-xs font-mono mb-2">
+                        Debug: Showing {mxGroupData.emails.length} emails on page {mxGroupData.page} of {mxGroupData.totalPages} (Total: {mxGroupData.totalEmails})
+                      </div>
+
+                      {/* Email List */}
+                      <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                        {mxGroupData.emails.length > 0 ? (
+                          mxGroupData.emails.map((email: string, idx: number) => (
+                            <div key={idx} className={`px-4 py-3 ${idx !== mxGroupData.emails.length - 1 ? 'border-b border-gray-100' : ''}`}>
+                              <p className="text-sm text-gray-800 font-mono">{email}</p>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="px-4 py-8 text-center text-gray-500">
+                            No emails on this page
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Pagination Controls */}
+                      {mxGroupData.totalPages > 1 && (
+                        <div className="flex items-center justify-center space-x-3 mt-4">
+                          <button
+                            onClick={() => setEmailsPage(p => Math.max(1, p - 1))}
+                            disabled={emailsPage === 1}
+                            className="px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed hover:bg-blue-700 transition-colors"
+                          >
+                            Previous
+                          </button>
+                          <span className="text-sm text-gray-700 font-medium bg-gray-100 px-4 py-2 rounded-lg">
+                            Page {emailsPage} of {mxGroupData.totalPages}
+                          </span>
+                          <button
+                            onClick={() => setEmailsPage(p => Math.min(mxGroupData.totalPages, p + 1))}
+                            disabled={emailsPage === mxGroupData.totalPages}
+                            className="px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed hover:bg-blue-700 transition-colors"
+                          >
+                            Next
+                          </button>
+                        </div>
+                      )}
+                    </>
+                  )}
                 </div>
               )}
             </div>

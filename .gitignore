@@ -1,5 +1,6 @@
 # Backend (Go)
 backend/datacleaner
+backend/results
 backend/datacleaner.exe
 *.exe
 *.dll

@@ -37,7 +37,7 @@ type EmailValidator struct {
 func NewEmailValidator(concurrency int) *EmailValidator {
 	return &EmailValidator{
 		concurrency:        concurrency,
-		timeout:            5 * time.Second,
+		timeout:            3 * time.Second,
 		verifyVPSHost:      "", // EMPTY = Syntax+DNS only (safe default)
 		verifyVPSPort:      25,
 		verifyFromEmail:    "verify@datacleaner.local",
@@ -280,7 +280,7 @@ func (v *EmailValidator) TestSendingSMTPToMX(mxServer string) bool {
 }
 
 // ValidateEmailBatch validates multiple emails concurrently
-func (v *EmailValidator) ValidateEmailBatch(emails []string, progressChan chan<- int) []models.ValidationResult {
+func (v *EmailValidator) ValidateEmailBatch(emails []string, progressChan chan<- models.ValidationResult) []models.ValidationResult {
 	results := make([]models.ValidationResult, len(emails))
 	semaphore := make(chan struct{}, v.concurrency)
 	done := make(chan struct {
@@ -296,25 +296,27 @@ func (v *EmailValidator) ValidateEmailBatch(emails []string, progressChan chan<-
 
 			isValid, syntaxValid, dnsValid, smtpValid, mxRecord, errorReason := v.ValidateEmail(emailAddr)
 
+			result := models.ValidationResult{
+				Email:       emailAddr,
+				IsValid:     isValid,
+				SyntaxValid: syntaxValid,
+				DNSValid:    dnsValid,
+				SMTPValid:   smtpValid,
+				MXRecord:    mxRecord,
+				ErrorReason: errorReason,
+			}
+
 			done <- struct {
 				index int
 				result models.ValidationResult
 			}{
 				index: index,
-				result: models.ValidationResult{
-					Email:       emailAddr,
-					IsValid:     isValid,
-					SyntaxValid: syntaxValid,
-					DNSValid:    dnsValid,
-					SMTPValid:   smtpValid,
-					MXRecord:    mxRecord,
-					ErrorReason: errorReason,
-				},
+				result: result,
 			}
 
-			// Send progress update
+			// Send progress update with result
 			if progressChan != nil {
-				progressChan <- 1
+				progressChan <- result
 			}
 		}(i, email)
 	}

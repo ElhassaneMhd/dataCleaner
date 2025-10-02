@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { JobStatus, ValidationResults, UploadResponse } from '../types';
+import type { JobStatus, ValidationResults, UploadResponse, MXGroupsListResponse } from '../types';
 
 const API_BASE_URL = '/api';
 
@@ -36,6 +36,38 @@ export const downloadValidEmails = (jobId: string, format: 'csv' | 'excel') => {
 
 export const downloadMXGrouped = (jobId: string, format: 'csv' | 'excel') => {
   window.open(`${API_BASE_URL}/jobs/${jobId}/export/mx?format=${format}`, '_blank');
+};
+
+export interface MXGroupPaginatedResponse {
+  mxRecord: string;
+  emails: string[];
+  page: number;
+  pageSize: number;
+  totalEmails: number;
+  totalPages: number;
+}
+
+export const getMXGroupsList = async (
+  jobId: string,
+  page: number = 1,
+  pageSize: number = 10
+): Promise<MXGroupsListResponse> => {
+  const response = await api.get<MXGroupsListResponse>(
+    `/jobs/${jobId}/mx-groups?page=${page}&pageSize=${pageSize}`
+  );
+  return response.data;
+};
+
+export const getMXGroupPaginated = async (
+  jobId: string,
+  mxRecord: string,
+  page: number = 1,
+  pageSize: number = 10
+): Promise<MXGroupPaginatedResponse> => {
+  const response = await api.get<MXGroupPaginatedResponse>(
+    `/jobs/${jobId}/mx-group?mx=${encodeURIComponent(mxRecord)}&page=${page}&pageSize=${pageSize}`
+  );
+  return response.data;
 };
 
 // SMTP Configuration
