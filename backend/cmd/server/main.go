@@ -1,0 +1,67 @@
+package main
+
+import (
+	"datacleaner/internal/handlers"
+	"log"
+
+	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/cors"
+	"github.com/gofiber/fiber/v2/middleware/logger"
+)
+
+func main() {
+	app := fiber.New(fiber.Config{
+		BodyLimit: 100 * 1024 * 1024, // 100MB max file size
+	})
+
+	// Middleware
+	app.Use(logger.New())
+	app.Use(cors.New(cors.Config{
+		AllowOrigins: "*",
+		AllowHeaders: "Origin, Content-Type, Accept",
+	}))
+
+	// Initialize handler
+	h := handlers.NewHandler()
+
+	// Routes
+	api := app.Group("/api")
+
+	// Upload and validate
+	api.Post("/upload", h.UploadAndValidate)
+
+	// Get job status
+	api.Get("/jobs/:jobId/status", h.GetJobStatus)
+
+	// Get validation results
+	api.Get("/jobs/:jobId/results", h.GetValidationResults)
+
+	// Export valid emails (single file)
+	api.Get("/jobs/:jobId/export/valid", h.ExportValidEmails)
+
+	// Export by MX (zip file with multiple files)
+	api.Get("/jobs/:jobId/export/mx", h.ExportByMX)
+
+	// Configure SMTP validation settings
+	api.Post("/config/smtp", h.ConfigureSMTP)
+
+	// Get current SMTP configuration
+	api.Get("/config/smtp", h.GetSMTPConfig)
+
+	// Health check
+	api.Get("/health", func(c *fiber.Ctx) error {
+		return c.JSON(fiber.Map{"status": "ok"})
+	})
+
+	log.Println("Server starting on :8080")
+	log.Println("SMTP Configuration:")
+	log.Println("  - Default From Email: verify@datacleaner.local")
+	log.Println("  - Default HELO Hostname: datacleaner.local")
+	log.Println("  - SMTP Enabled: true")
+	log.Println("  - Bypass on Blacklist: true")
+	log.Println("")
+	log.Println("To configure SMTP settings, use:")
+	log.Println("  POST /api/config/smtp")
+	log.Println("  Body: {\"fromEmail\": \"your@email.com\", \"heloHostname\": \"yourdomain.com\", \"smtpEnabled\": true, \"bypassBlacklist\": true}")
+	log.Fatal(app.Listen(":8080"))
+}

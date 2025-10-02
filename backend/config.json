@@ -1,0 +1,13 @@
+{
+  "smtp_validation": {
+    "enabled": true,
+    "from_email": "verify@datacleaner.local",
+    "helo_hostname": "datacleaner.local",
+    "timeout_seconds": 10,
+    "bypass_on_blacklist": true
+  },
+  "validation": {
+    "concurrency": 100,
+    "chunk_size": 1000
+  }
+}
