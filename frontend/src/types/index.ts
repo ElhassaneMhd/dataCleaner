@@ -23,14 +23,21 @@ export interface ValidationResult {
 
 export interface MXGroup {
   mxRecord: string;
-  emails: string[];
+  emails: string[]; // Empty in summary, full list only in exports
   count: number;
+  sendingSMTPTest?: boolean;
 }
 
 export interface ValidationResults {
-  validEmails: ValidationResult[];
-  invalidEmails: ValidationResult[];
+  validCount: number;
+  invalidCount: number;
   mxGroups: MXGroup[];
+  summary: {
+    totalProcessed: number;
+    validEmails: number;
+    invalidEmails: number;
+    mxGroupCount: number;
+  };
 }
 
 export interface UploadResponse {

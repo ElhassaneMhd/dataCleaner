@@ -190,7 +190,7 @@ func (h *Handler) GetJobStatus(c *fiber.Ctx) error {
 	return c.JSON(jobData.Status)
 }
 
-// GetValidationResults returns validation results
+// GetValidationResults returns validation results summary (counts only, no email lists)
 func (h *Handler) GetValidationResults(c *fiber.Ctx) error {
 	jobID := c.Params("jobId")
 
@@ -204,16 +204,28 @@ func (h *Handler) GetValidationResults(c *fiber.Ctx) error {
 		})
 	}
 
+	// Only return counts and summaries for performance
+	// Full email lists are available via export endpoints
 	return c.JSON(fiber.Map{
-		"validEmails":   jobData.ValidResults,
-		"invalidEmails": jobData.InvalidResults,
-		"mxGroups":      h.getMXGroupsSummary(jobData.MXGroups),
+		"validCount":   len(jobData.ValidResults),
+		"invalidCount": len(jobData.InvalidResults),
+		"mxGroups":     h.getMXGroupsSummary(jobData.MXGroups),
+		"summary": fiber.Map{
+			"totalProcessed": jobData.Status.TotalRecords,
+			"validEmails":    len(jobData.ValidResults),
+			"invalidEmails":  len(jobData.InvalidResults),
+			"mxGroupCount":   len(jobData.MXGroups),
+		},
 	})
 }
 
-// getMXGroupsSummary returns MX groups summary with sending SMTP test results
+// getMXGroupsSummary returns MX groups summary with counts only (no email lists for performance)
 func (h *Handler) getMXGroupsSummary(mxGroups map[string][]models.ValidationResult) []models.MXGroup {
-	var groups []models.MXGroup
+	groups := []models.MXGroup{} // Initialize as empty array, not nil
+
+	if mxGroups == nil || len(mxGroups) == 0 {
+		return groups
+	}
 
 	// Test each MX server with sending SMTP if enabled
 	mxTestResults := make(map[string]bool)
@@ -222,13 +234,10 @@ func (h *Handler) getMXGroupsSummary(mxGroups map[string][]models.ValidationResu
 	}
 
 	for mx, results := range mxGroups {
-		emails := make([]string, len(results))
-		for i, r := range results {
-			emails[i] = r.Email
-		}
+		// Only return count, not the actual email list (for performance)
 		groups = append(groups, models.MXGroup{
 			MXRecord:        mx,
-			Emails:          emails,
+			Emails:          []string{}, // Empty array - emails available via export only
 			Count:           len(results),
 			SendingSMTPTest: mxTestResults[mx],
 		})
