@@ -42,8 +42,8 @@ export const downloadAllMXGroups = (jobId: string, format: 'csv' | 'excel') => {
   window.open(`${API_BASE_URL}/jobs/${jobId}/export/mx-all?format=${format}`, '_blank');
 };
 
-export const downloadSelectedMXGroups = async (jobId: string, mxRecords: string[], format: 'csv' | 'excel') => {
-  const response = await api.post(`/jobs/${jobId}/export/mx-selected?format=${format}`, {
+export const downloadSelectedMXGroups = async (jobId: string, mxRecords: string[], format: 'csv' | 'excel', merge: boolean = false) => {
+  const response = await api.post(`/jobs/${jobId}/export/mx-selected?format=${format}&merge=${merge}`, {
     mxRecords
   }, {
     responseType: 'blob'
@@ -53,7 +53,16 @@ export const downloadSelectedMXGroups = async (jobId: string, mxRecords: string[
   const url = window.URL.createObjectURL(new Blob([response.data]));
   const link = document.createElement('a');
   link.href = url;
-  link.setAttribute('download', mxRecords.length === 1 ? `${mxRecords[0]}.${format === 'excel' ? 'xlsx' : 'csv'}` : `selected_mx_groups.zip`);
+
+  // Determine filename based on merge option
+  let filename: string;
+  if (merge) {
+    filename = `merged_mx_groups.${format === 'excel' ? 'xlsx' : 'csv'}`;
+  } else {
+    filename = mxRecords.length === 1 ? `${mxRecords[0]}.${format === 'excel' ? 'xlsx' : 'csv'}` : `selected_mx_groups.zip`;
+  }
+
+  link.setAttribute('download', filename);
   document.body.appendChild(link);
   link.click();
   link.remove();

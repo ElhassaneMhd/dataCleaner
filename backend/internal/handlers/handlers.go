@@ -550,9 +550,11 @@ func (h *Handler) ExportByMX(c *fiber.Ctx) error {
 }
 
 // ExportSelectedMXGroups exports selected MX groups (POST with body: {mxRecords: [...]})
+// Query params: format=csv/excel, merge=true/false
 func (h *Handler) ExportSelectedMXGroups(c *fiber.Ctx) error {
 	jobID := c.Params("jobId")
 	format := c.Query("format", "csv")
+	merge := c.Query("merge", "false") == "true" // Check if merge option is enabled
 
 	// Parse request body
 	var body struct {
@@ -592,6 +594,26 @@ func (h *Handler) ExportSelectedMXGroups(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 			"error": "No matching MX groups found",
 		})
+	}
+
+	// If merge option is enabled, combine all groups into one file
+	if merge {
+		var allResults []models.ValidationResult
+		for _, results := range selectedGroups {
+			allResults = append(allResults, results...)
+		}
+
+		data, err := h.grouper.ExportAllToSingleFile(allResults, format)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": fmt.Sprintf("Export failed: %v", err),
+			})
+		}
+
+		filename := fmt.Sprintf("merged_mx_groups.%s", getFileExtension(format))
+		c.Set("Content-Type", getContentType(format))
+		c.Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
+		return c.Send(data)
 	}
 
 	// If only one MX group selected, return as single file

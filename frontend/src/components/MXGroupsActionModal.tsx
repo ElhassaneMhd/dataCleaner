@@ -12,6 +12,7 @@ export default function MXGroupsActionModal({ jobId, selectedMXGroups, onClose }
   const [activeAction, setActiveAction] = useState<'selected' | 'range'>('selected');
   const [selectedRange, setSelectedRange] = useState<string>('');
   const [isExporting, setIsExporting] = useState(false);
+  const [mergeIntoOne, setMergeIntoOne] = useState(false);
 
   // Fetch all MX groups to filter by range
   const { data: mxGroupsData } = useQuery({
@@ -140,14 +141,32 @@ export default function MXGroupsActionModal({ jobId, selectedMXGroups, onClose }
                       <span>Export {selectedMXGroups.size} Selected MX Groups</span>
                     </h4>
                     <p className="text-sm text-purple-700 mb-4">
-                      {selectedMXGroups.size === 1 ? 'Single file will be downloaded' : 'ZIP file with multiple files will be downloaded'}
+                      {selectedMXGroups.size === 1 ? 'Single file will be downloaded' : mergeIntoOne ? 'All groups will be merged into one file' : 'ZIP file with multiple files will be downloaded'}
                     </p>
+
+                    {selectedMXGroups.size > 1 && (
+                      <div className="mb-4 p-3 bg-white rounded-lg border border-purple-200">
+                        <label className="flex items-center space-x-3 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={mergeIntoOne}
+                            onChange={(e) => setMergeIntoOne(e.target.checked)}
+                            className="w-5 h-5 text-purple-600 rounded border-gray-300 focus:ring-purple-500"
+                          />
+                          <div>
+                            <span className="text-sm font-semibold text-gray-900">Merge all groups into one file</span>
+                            <p className="text-xs text-gray-600">Combine all selected MX groups into a single file instead of a ZIP</p>
+                          </div>
+                        </label>
+                      </div>
+                    )}
+
                     <div className="flex gap-2">
                       <button
                         onClick={async () => {
                           setIsExporting(true);
                           try {
-                            await downloadSelectedMXGroups(jobId, Array.from(selectedMXGroups), 'csv');
+                            await downloadSelectedMXGroups(jobId, Array.from(selectedMXGroups), 'csv', mergeIntoOne);
                             onClose();
                           } finally {
                             setIsExporting(false);
@@ -156,13 +175,13 @@ export default function MXGroupsActionModal({ jobId, selectedMXGroups, onClose }
                         disabled={isExporting}
                         className="flex-1 px-4 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-semibold transition-colors disabled:opacity-50"
                       >
-                        {isExporting ? 'Exporting...' : selectedMXGroups.size === 1 ? 'Download CSV' : 'Download ZIP (CSV)'}
+                        {isExporting ? 'Exporting...' : selectedMXGroups.size === 1 ? 'Download CSV' : mergeIntoOne ? 'Download Merged CSV' : 'Download ZIP (CSV)'}
                       </button>
                       <button
                         onClick={async () => {
                           setIsExporting(true);
                           try {
-                            await downloadSelectedMXGroups(jobId, Array.from(selectedMXGroups), 'excel');
+                            await downloadSelectedMXGroups(jobId, Array.from(selectedMXGroups), 'excel', mergeIntoOne);
                             onClose();
                           } finally {
                             setIsExporting(false);
@@ -171,7 +190,7 @@ export default function MXGroupsActionModal({ jobId, selectedMXGroups, onClose }
                         disabled={isExporting}
                         className="flex-1 px-4 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-semibold transition-colors disabled:opacity-50"
                       >
-                        {isExporting ? 'Exporting...' : selectedMXGroups.size === 1 ? 'Download Excel' : 'Download ZIP (Excel)'}
+                        {isExporting ? 'Exporting...' : selectedMXGroups.size === 1 ? 'Download Excel' : mergeIntoOne ? 'Download Merged Excel' : 'Download ZIP (Excel)'}
                       </button>
                     </div>
                   </div>

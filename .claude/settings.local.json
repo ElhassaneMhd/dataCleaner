@@ -1,7 +1,14 @@
 {
   "permissions": {
     "allow": [
-      "Bash(go build:*)"
+      "Bash(go build:*)",
+      "Read(//c/Users/acer/Desktop/p/email-platform/**)",
+      "Bash(go mod init:*)",
+      "Bash(go get:*)",
+      "Bash(npm create:*)",
+      "Bash(go mod:*)",
+      "Bash(docker-compose:*)",
+      "Bash(curl:*)"
     ],
     "deny": [],
     "ask": []
