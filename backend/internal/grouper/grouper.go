@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/csv"
 	"fmt"
+	"strings"
 
 	"datacleaner/internal/models"
 
@@ -16,13 +17,15 @@ func NewMXGrouper() *MXGrouper {
 	return &MXGrouper{}
 }
 
-// GroupByMX groups validation results by MX record
+// GroupByMX groups validation results by MX record (case-insensitive)
 func (g *MXGrouper) GroupByMX(results []models.ValidationResult) map[string][]models.ValidationResult {
 	groups := make(map[string][]models.ValidationResult)
 
 	for _, result := range results {
 		if result.IsValid && result.MXRecord != "" {
-			groups[result.MXRecord] = append(groups[result.MXRecord], result)
+			// Normalize MX record to lowercase for case-insensitive grouping
+			normalizedMX := strings.ToLower(result.MXRecord)
+			groups[normalizedMX] = append(groups[normalizedMX], result)
 		}
 	}
 

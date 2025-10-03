@@ -438,6 +438,36 @@ func (h *Handler) GetMXGroupPaginated(c *fiber.Ctx) error {
 	})
 }
 
+// ExportInvalidEmails exports all invalid emails
+func (h *Handler) ExportInvalidEmails(c *fiber.Ctx) error {
+	jobID := c.Params("jobId")
+	format := c.Query("format", "csv") // csv or excel
+
+	h.mu.RLock()
+	jobData, exists := h.jobs[jobID]
+	h.mu.RUnlock()
+
+	if !exists {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"error": "Job not found",
+		})
+	}
+
+	data, err := h.grouper.ExportAllToSingleFile(jobData.InvalidResults, format)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": fmt.Sprintf("Export failed: %v", err),
+		})
+	}
+
+	// Set headers
+	filename := fmt.Sprintf("invalid_emails.%s", getFileExtension(format))
+	c.Set("Content-Type", getContentType(format))
+	c.Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
+
+	return c.Send(data)
+}
+
 // ExportValidEmails exports all valid emails
 func (h *Handler) ExportValidEmails(c *fiber.Ctx) error {
 	jobID := c.Params("jobId")
@@ -468,7 +498,7 @@ func (h *Handler) ExportValidEmails(c *fiber.Ctx) error {
 	return c.Send(data)
 }
 
-// ExportByMX exports emails grouped by MX record as zip
+// ExportByMX exports emails grouped by MX record as zip (all MX groups)
 func (h *Handler) ExportByMX(c *fiber.Ctx) error {
 	jobID := c.Params("jobId")
 	format := c.Query("format", "csv")
@@ -514,7 +544,104 @@ func (h *Handler) ExportByMX(c *fiber.Ctx) error {
 
 	// Send zip
 	c.Set("Content-Type", "application/zip")
-	c.Set("Content-Disposition", "attachment; filename=mx_grouped_emails.zip")
+	c.Set("Content-Disposition", "attachment; filename=all_mx_groups.zip")
+
+	return c.Send(buf.Bytes())
+}
+
+// ExportSelectedMXGroups exports selected MX groups (POST with body: {mxRecords: [...]})
+func (h *Handler) ExportSelectedMXGroups(c *fiber.Ctx) error {
+	jobID := c.Params("jobId")
+	format := c.Query("format", "csv")
+
+	// Parse request body
+	var body struct {
+		MXRecords []string `json:"mxRecords"`
+	}
+	if err := c.BodyParser(&body); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid request body",
+		})
+	}
+
+	if len(body.MXRecords) == 0 {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "No MX records specified",
+		})
+	}
+
+	h.mu.RLock()
+	jobData, exists := h.jobs[jobID]
+	h.mu.RUnlock()
+
+	if !exists {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"error": "Job not found",
+		})
+	}
+
+	// Filter MX groups to only selected ones
+	selectedGroups := make(map[string][]models.ValidationResult)
+	for _, mxRecord := range body.MXRecords {
+		if results, exists := jobData.MXGroups[mxRecord]; exists {
+			selectedGroups[mxRecord] = results
+		}
+	}
+
+	if len(selectedGroups) == 0 {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"error": "No matching MX groups found",
+		})
+	}
+
+	// If only one MX group selected, return as single file
+	if len(selectedGroups) == 1 {
+		for mxRecord, results := range selectedGroups {
+			data, err := h.grouper.ExportAllToSingleFile(results, format)
+			if err != nil {
+				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+					"error": fmt.Sprintf("Export failed: %v", err),
+				})
+			}
+
+			filename := fmt.Sprintf("%s.%s", mxRecord, getFileExtension(format))
+			c.Set("Content-Type", getContentType(format))
+			c.Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
+			return c.Send(data)
+		}
+	}
+
+	// Multiple MX groups - create zip
+	files, err := h.grouper.ExportGroupedToMultipleFiles(selectedGroups, format)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": fmt.Sprintf("Export failed: %v", err),
+		})
+	}
+
+	var buf bytes.Buffer
+	zipWriter := zip.NewWriter(&buf)
+
+	for filename, data := range files {
+		fullFilename := fmt.Sprintf("%s.%s", filename, getFileExtension(format))
+		w, err := zipWriter.Create(fullFilename)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "Failed to create zip file",
+			})
+		}
+		_, err = w.Write(data)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "Failed to write to zip file",
+			})
+		}
+	}
+
+	zipWriter.Close()
+
+	c.Set("Content-Type", "application/zip")
+	c.Set("Content-Disposition", "attachment; filename=selected_mx_groups.zip")
 
 	return c.Send(buf.Bytes())
 }

@@ -3,11 +3,16 @@ import FileUpload from './components/FileUpload';
 import ValidationProgress from './components/ValidationProgress';
 import Results from './components/Results';
 import SMTPConfig from './components/SMTPConfig';
+import ExportModal from './components/ExportModal';
+import MXGroupsActionModal from './components/MXGroupsActionModal';
 
 function App() {
   const [jobId, setJobId] = useState<string>('');
   const [showResults, setShowResults] = useState(false);
   const [showConfig, setShowConfig] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [showMXActionsModal, setShowMXActionsModal] = useState(false);
+  const [selectedMXGroups, setSelectedMXGroups] = useState<Set<string>>(new Set());
 
   const handleUploadSuccess = (newJobId: string) => {
     setJobId(newJobId);
@@ -126,7 +131,13 @@ function App() {
 
             {showResults && jobId && (
               <div className="space-y-6">
-                <Results jobId={jobId} />
+                <Results
+                  jobId={jobId}
+                  onOpenExport={() => setShowExportModal(true)}
+                  onOpenMXActions={() => setShowMXActionsModal(true)}
+                  selectedMXGroups={selectedMXGroups}
+                  setSelectedMXGroups={setSelectedMXGroups}
+                />
               </div>
             )}
           </div>
@@ -183,6 +194,23 @@ function App() {
 
         {/* SMTP Configuration Modal */}
         {showConfig && <SMTPConfig onClose={() => setShowConfig(false)} />}
+
+        {/* Export Modal */}
+        {showExportModal && showResults && jobId && (
+          <ExportModal
+            jobId={jobId}
+            onClose={() => setShowExportModal(false)}
+          />
+        )}
+
+        {/* MX Groups Action Modal */}
+        {showMXActionsModal && showResults && jobId && (
+          <MXGroupsActionModal
+            jobId={jobId}
+            selectedMXGroups={selectedMXGroups}
+            onClose={() => setShowMXActionsModal(false)}
+          />
+        )}
       </div>
     </div>
   );

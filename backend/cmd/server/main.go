@@ -51,8 +51,14 @@ func main() {
 	// Export valid emails (single file)
 	api.Get("/jobs/:jobId/export/valid", h.ExportValidEmails)
 
-	// Export by MX (zip file with multiple files)
-	api.Get("/jobs/:jobId/export/mx", h.ExportByMX)
+	// Export invalid emails (single file)
+	api.Get("/jobs/:jobId/export/invalid", h.ExportInvalidEmails)
+
+	// Export all MX groups (zip file with multiple files)
+	api.Get("/jobs/:jobId/export/mx-all", h.ExportByMX)
+
+	// Export selected MX groups (POST with mxRecords array)
+	api.Post("/jobs/:jobId/export/mx-selected", h.ExportSelectedMXGroups)
 
 	// Configure SMTP validation settings
 	api.Post("/config/smtp", h.ConfigureSMTP)

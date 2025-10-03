@@ -1,13 +1,17 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { getValidationResults, downloadValidEmails, downloadMXGrouped, getMXGroupsList, getMXGroupPaginated } from '../services/api';
+import { getValidationResults, getMXGroupsList, getMXGroupPaginated } from '../services/api';
 import type { ValidationResults, MXGroup } from '../types';
 
 interface ResultsProps {
   jobId: string;
+  onOpenExport: () => void;
+  onOpenMXActions: () => void;
+  selectedMXGroups: Set<string>;
+  setSelectedMXGroups: (groups: Set<string>) => void;
 }
 
-export default function Results({ jobId }: ResultsProps) {
+export default function Results({ jobId, onOpenExport, onOpenMXActions, selectedMXGroups, setSelectedMXGroups }: ResultsProps) {
   const [activeTab, setActiveTab] = useState<'summary' | 'mx'>('summary');
   const [selectedMX, setSelectedMX] = useState<string | null>(null);
   const [mxGroupsPage, setMxGroupsPage] = useState(1);
@@ -79,35 +83,15 @@ export default function Results({ jobId }: ResultsProps) {
               <h2 className="text-2xl font-bold text-white mb-1">Validation Complete ✓</h2>
               <p className="text-emerald-100 text-sm">Results ready for export</p>
             </div>
-            <div className="flex flex-wrap gap-2">
-              <button
-                onClick={() => downloadValidEmails(jobId, 'csv')}
-                className="px-4 py-2 bg-white/20 hover:bg-white/30 backdrop-blur-sm text-white rounded-lg font-medium shadow-md hover:shadow-lg transition-all duration-200 flex items-center space-x-2 text-sm"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-                <span>CSV</span>
-              </button>
-              <button
-                onClick={() => downloadValidEmails(jobId, 'excel')}
-                className="px-4 py-2 bg-white/20 hover:bg-white/30 backdrop-blur-sm text-white rounded-lg font-medium shadow-md hover:shadow-lg transition-all duration-200 flex items-center space-x-2 text-sm"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-                <span>Excel</span>
-              </button>
-              <button
-                onClick={() => downloadMXGrouped(jobId, 'csv')}
-                className="px-4 py-2 bg-white text-emerald-600 rounded-lg font-semibold shadow-md hover:shadow-lg hover:scale-105 transition-all duration-200 flex items-center space-x-2 text-sm"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                </svg>
-                <span>MX Groups (ZIP)</span>
-              </button>
-            </div>
+            <button
+              onClick={onOpenExport}
+              className="px-6 py-3 bg-white text-emerald-600 rounded-lg font-bold shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-200 flex items-center space-x-2"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              <span>Export Data</span>
+            </button>
           </div>
         </div>
 
@@ -229,6 +213,22 @@ export default function Results({ jobId }: ResultsProps) {
               {!selectedMX ? (
                 // MX Groups List (sorted by count - largest first)
                 <>
+                  {/* MX Actions Button */}
+                  <div className="flex items-center justify-between mb-4">
+                    <p className="text-sm text-gray-600">
+                      {selectedMXGroups.size > 0 ? `${selectedMXGroups.size} groups selected` : 'Select groups using checkboxes'}
+                    </p>
+                    <button
+                      onClick={onOpenMXActions}
+                      className="px-5 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-200 flex items-center space-x-2"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+                      </svg>
+                      <span>MX Actions</span>
+                    </button>
+                  </div>
+
                   {mxGroupsLoading ? (
                     <div className="text-center py-12">
                       <div className="w-12 h-12 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto mb-4"></div>
@@ -239,6 +239,20 @@ export default function Results({ jobId }: ResultsProps) {
                       <div className="px-5 py-4">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center space-x-3">
+                            <input
+                              type="checkbox"
+                              checked={selectedMXGroups.has(group.mxRecord)}
+                              onChange={(e) => {
+                                const newSelected = new Set(selectedMXGroups);
+                                if (e.target.checked) {
+                                  newSelected.add(group.mxRecord);
+                                } else {
+                                  newSelected.delete(group.mxRecord);
+                                }
+                                setSelectedMXGroups(newSelected);
+                              }}
+                              className="w-5 h-5 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                            />
                             <div className="w-10 h-10 rounded-lg bg-blue-500 flex items-center justify-center">
                               <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" />
